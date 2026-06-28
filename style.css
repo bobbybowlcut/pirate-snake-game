@@ -1,0 +1,8 @@
+body { background: #2c1e0f; color: #d4af37; font-family: 'Courier New', Courier, monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+#game-container { text-align: center; width: 100%; max-width: 400px; }
+canvas { background: #1a1208; border: 4px solid #d4af37; box-shadow: 0 0 20px rgba(212, 175, 55, 0.3); display: none; margin: 10px auto; }
+#start-screen { margin-top: 20px; }
+button { background: #d4af37; border: none; padding: 15px 30px; font-size: 20px; cursor: pointer; border-radius: 5px; }
+#d-pad { display: none; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px; }
+#d-pad button { width: 60px; height: 60px; font-size: 24px; touch-action: manipulation; }
+.row { display: flex; gap: 20px; }
