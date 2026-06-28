@@ -1,8 +1,359 @@
-body { background: #2c1e0f; color: #d4af37; font-family: 'Courier New', Courier, monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-#game-container { text-align: center; width: 100%; max-width: 400px; }
-canvas { background: #1a1208; border: 4px solid #d4af37; box-shadow: 0 0 20px rgba(212, 175, 55, 0.3); display: none; margin: 10px auto; }
-#start-screen { margin-top: 20px; }
-button { background: #d4af37; border: none; padding: 15px 30px; font-size: 20px; cursor: pointer; border-radius: 5px; }
-#d-pad { display: none; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px; }
-#d-pad button { width: 60px; height: 60px; font-size: 24px; touch-action: manipulation; }
-.row { display: flex; gap: 20px; }
+/* =========================
+   GLOBAL RESET
+========================= */
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    min-height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    background: radial-gradient(circle at center, #2b2b2b 0%, #111 70%);
+    color: #fff;
+    font-family: "Courier New", Courier, monospace;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    overflow: hidden;
+}
+
+/* =========================
+   MAIN APP CONTAINER
+========================= */
+
+#game-container {
+    position: relative;
+
+    width: 420px;
+    height: 700px;
+
+    max-width: 96vw;
+    max-height: 96vh;
+
+    background: #000;
+    border: 4px solid #8b4513;
+    box-shadow: 0 0 28px rgba(212, 175, 55, 0.45);
+
+    overflow: hidden;
+}
+
+/* =========================
+   SCREEN SYSTEM
+========================= */
+
+.app-screen {
+    position: absolute;
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.menu-screen {
+    background-image: url("ship-background.jpg");
+    background-size: cover;
+    background-position: center;
+}
+
+.game-screen {
+    background: #000;
+    justify-content: flex-start;
+    padding-top: 12px;
+}
+
+/* =========================
+   MENU / CARD UI
+========================= */
+
+.menu-card {
+    width: 86%;
+    max-width: 350px;
+
+    padding: 20px;
+
+    background: rgba(0, 0, 0, 0.88);
+    border: 2px solid #d4af37;
+    border-radius: 12px;
+
+    text-align: center;
+
+    box-shadow: 0 0 22px rgba(0, 0, 0, 0.85);
+}
+
+.menu-card h1,
+.menu-card h2 {
+    margin-top: 0;
+    color: #ffd700;
+    text-shadow: 1px 1px 2px #000;
+}
+
+.helper-text {
+    font-size: 13px;
+    line-height: 1.35;
+    opacity: 0.9;
+}
+
+.welcome-text,
+.final-score-text {
+    font-size: 17px;
+    font-weight: bold;
+}
+
+/* =========================
+   BUTTONS & INPUTS
+========================= */
+
+button {
+    width: 86%;
+    max-width: 250px;
+
+    padding: 11px 14px;
+    margin: 7px auto;
+
+    display: block;
+
+    background: #d4af37;
+    color: #000;
+
+    border: 2px solid #fff;
+    border-radius: 8px;
+
+    font-family: inherit;
+    font-weight: bold;
+    font-size: 15px;
+
+    cursor: pointer;
+    user-select: none;
+
+    transition:
+        transform 0.08s ease,
+        background 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+button:hover {
+    background: #ffd700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+}
+
+button:active {
+    transform: scale(0.96);
+}
+
+input {
+    width: 86%;
+    max-width: 270px;
+
+    padding: 11px;
+    margin: 9px auto;
+
+    display: block;
+
+    font-family: inherit;
+    font-size: 15px;
+    text-align: center;
+
+    border: 2px solid #d4af37;
+    border-radius: 7px;
+
+    outline: none;
+}
+
+input:focus {
+    border-color: #ffd700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.35);
+}
+
+/* =========================
+   GAME BOARD
+========================= */
+
+#score-display {
+    width: 100%;
+    margin-bottom: 8px;
+
+    color: #ffd700;
+    font-size: 21px;
+    font-weight: bold;
+    text-align: center;
+
+    text-shadow: 1px 1px 2px #000;
+}
+
+#game-canvas {
+    width: 400px;
+    height: 400px;
+
+    max-width: 95%;
+    max-height: 400px;
+
+    display: block;
+
+    background: #0b3d91;
+    border: 3px solid #d4af37;
+}
+
+/* =========================
+   D-PAD
+========================= */
+
+#d-pad {
+    display: grid;
+    grid-template-columns: 62px 62px 62px;
+    gap: 10px;
+
+    margin-top: 15px;
+
+    justify-content: center;
+    align-items: center;
+}
+
+.d-btn {
+    width: 62px;
+    height: 62px;
+
+    max-width: none;
+
+    padding: 0;
+    margin: 0;
+
+    background: #5d4037;
+    color: #ffd700;
+
+    border: 2px solid #d4af37;
+    border-radius: 10px;
+
+    font-size: 23px;
+    line-height: 1;
+
+    touch-action: manipulation;
+}
+
+.d-btn:hover {
+    background: #6d4c41;
+}
+
+.d-btn:active {
+    background: #3e2723;
+    transform: scale(0.92);
+}
+
+/* =========================
+   MESSAGE BOARD
+========================= */
+
+.board-card {
+    max-height: 94%;
+}
+
+#messages-container {
+    height: 230px;
+    overflow-y: auto;
+
+    margin: 10px 0;
+    padding: 9px;
+
+    background: rgba(8, 8, 8, 0.96);
+    border: 1px solid #555;
+    border-radius: 7px;
+
+    text-align: left;
+    font-size: 14px;
+}
+
+.message {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    line-height: 1.35;
+    word-wrap: break-word;
+}
+
+.message:last-child {
+    border-bottom: none;
+}
+
+.username {
+    color: #ffd700;
+    font-weight: bold;
+}
+
+/* =========================
+   LEADERBOARD
+========================= */
+
+#leaderboard-list {
+    min-height: 170px;
+    padding-left: 34px;
+    margin: 14px 0;
+
+    text-align: left;
+}
+
+#leaderboard-list li {
+    margin: 8px 0;
+    font-weight: bold;
+}
+
+/* =========================
+   RESPONSIVE FIXES
+========================= */
+
+@media (max-height: 720px) {
+    #game-container {
+        height: 96vh;
+    }
+
+    #game-canvas {
+        width: 360px;
+        height: 360px;
+    }
+
+    #d-pad {
+        grid-template-columns: 54px 54px 54px;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .d-btn {
+        width: 54px;
+        height: 54px;
+        font-size: 20px;
+    }
+
+    #messages-container {
+        height: 190px;
+    }
+}
+
+@media (max-width: 440px) {
+    #game-container {
+        width: 96vw;
+    }
+
+    #game-canvas {
+        width: 94vw;
+        height: 94vw;
+        max-height: 400px;
+    }
+
+    .menu-card {
+        width: 90%;
+    }
+}
