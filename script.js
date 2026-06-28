@@ -1,6 +1,45 @@
 "use strict";
 
 /* =========================
+   FIREBASE IMPORTS
+========================= */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+
+import {
+    getFirestore,
+    collection,
+    addDoc,
+    deleteDoc,
+    doc,
+    getDocs,
+    onSnapshot,
+    query,
+    where,
+    orderBy,
+    limit,
+    serverTimestamp,
+    Timestamp
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+/* =========================
+   FIREBASE CONFIG
+========================= */
+
+const firebaseConfig = {
+    apiKey: "AIzaSyBsc7kIz7woCLCl-0xk76CjUsX8cmstyFM",
+    authDomain: "pirate-snake.firebaseapp.com",
+    projectId: "pirate-snake",
+    storageBucket: "pirate-snake.firebasestorage.app",
+    messagingSenderId: "786570946514",
+    appId: "1:786570946514:web:1c190f9b7bf27f73b18a0b",
+    measurementId: "G-CR21XZGM55"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* =========================
    CONFIG
 ========================= */
 
@@ -44,35 +83,10 @@ const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
 
 /* =========================
-   SAFE STORAGE HELPERS
-========================= */
-
-function readJSON(key, fallbackValue) {
-    try {
-        const storedValue = localStorage.getItem(key);
-        return storedValue ? JSON.parse(storedValue) : fallbackValue;
-    } catch (error) {
-        console.warn(`Unable to read ${key} from localStorage.`, error);
-        return fallbackValue;
-    }
-}
-
-function writeJSON(key, value) {
-    try {
-        localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-        console.warn(`Unable to write ${key} to localStorage.`, error);
-    }
-}
-
-/* =========================
    APP STATE
 ========================= */
 
 let currentUser = localStorage.getItem("pirateSnakeUser") || "";
-
-let messages = readJSON("pirateSnakeMessages", []);
-let leaderboardScores = readJSON("pirateSnakeScores", []);
 
 let snake = [];
 let food = { x: 0, y: 0 };
@@ -85,6 +99,9 @@ let score = 0;
 let gameLoopId = null;
 let gameActive = false;
 let gameEnded = false;
+
+let liveMessages = [];
+let liveLeaderboardScores = [];
 
 /* =========================
    IMAGE
@@ -122,6 +139,8 @@ function showMenu() {
 
 function initApp() {
     stopGame();
+    listenForMessages();
+    listenForLeaderboard();
 
     if (currentUser.trim()) {
         showMenu();
@@ -159,25 +178,57 @@ usernameInput.addEventListener("keydown", event => {
 });
 
 /* =========================
-   MESSAGE BOARD
+   MESSAGE BOARD - FIRESTORE
 ========================= */
 
-function pruneOldMessages() {
-    const now = Date.now();
+function getMessageCutoffTimestamp() {
+    const cutoffMs = Date.now() - MESSAGE_LIFETIME_MS;
+    return Timestamp.fromMillis(cutoffMs);
+}
 
-    messages = messages
-        .filter(message => now - message.time < MESSAGE_LIFETIME_MS)
-        .slice(-MAX_MESSAGES);
+async function deleteExpiredMessages() {
+    const cutoff = getMessageCutoffTimestamp();
 
-    writeJSON("pirateSnakeMessages", messages);
+    const expiredMessagesQuery = query(
+        collection(db, "messages"),
+        where("createdAt", "<", cutoff)
+    );
+
+    const snapshot = await getDocs(expiredMessagesQuery);
+
+    snapshot.forEach(async documentSnapshot => {
+        await deleteDoc(doc(db, "messages", documentSnapshot.id));
+    });
+}
+
+function listenForMessages() {
+    const cutoff = getMessageCutoffTimestamp();
+
+    const messagesQuery = query(
+        collection(db, "messages"),
+        where("createdAt", ">=", cutoff),
+        orderBy("createdAt", "asc"),
+        limit(MAX_MESSAGES)
+    );
+
+    onSnapshot(messagesQuery, snapshot => {
+        liveMessages = [];
+
+        snapshot.forEach(documentSnapshot => {
+            liveMessages.push({
+                id: documentSnapshot.id,
+                ...documentSnapshot.data()
+            });
+        });
+
+        renderMessages();
+    });
 }
 
 function renderMessages() {
-    pruneOldMessages();
-
     messagesContainer.innerHTML = "";
 
-    if (messages.length === 0) {
+    if (liveMessages.length === 0) {
         const emptyMessage = document.createElement("div");
         emptyMessage.className = "message";
         emptyMessage.textContent = "No messages yet.";
@@ -185,16 +236,16 @@ function renderMessages() {
         return;
     }
 
-    messages.forEach(message => {
+    liveMessages.forEach(message => {
         const row = document.createElement("div");
         row.className = "message";
 
         const username = document.createElement("span");
         username.className = "username";
-        username.textContent = message.user;
+        username.textContent = message.user || "Guest";
 
         const messageText = document.createElement("span");
-        messageText.textContent = `: ${message.text}`;
+        messageText.textContent = `: ${message.text || ""}`;
 
         row.appendChild(username);
         row.appendChild(messageText);
@@ -205,25 +256,23 @@ function renderMessages() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function postMessage() {
+async function postMessage() {
     const text = newMessageInput.value.trim();
 
     if (!text) return;
 
-    messages.push({
+    await addDoc(collection(db, "messages"), {
         user: currentUser || "Guest",
         text,
-        time: Date.now()
+        createdAt: serverTimestamp()
     });
 
     newMessageInput.value = "";
-
-    pruneOldMessages();
-    renderMessages();
 }
 
-openBoardBtn.addEventListener("click", () => {
+openBoardBtn.addEventListener("click", async () => {
     stopGame();
+    await deleteExpiredMessages();
     renderMessages();
     showScreen("message-board-screen");
 });
@@ -238,50 +287,81 @@ newMessageInput.addEventListener("keydown", event => {
 });
 
 /* =========================
-   LEADERBOARD
+   LEADERBOARD - FIRESTORE
 ========================= */
 
-function scoreQualifiesForLeaderboard(newScore) {
+function listenForLeaderboard() {
+    const leaderboardQuery = query(
+        collection(db, "leaderboard"),
+        orderBy("score", "desc"),
+        limit(MAX_LEADERBOARD_SCORES)
+    );
+
+    onSnapshot(leaderboardQuery, snapshot => {
+        liveLeaderboardScores = [];
+
+        snapshot.forEach(documentSnapshot => {
+            liveLeaderboardScores.push({
+                id: documentSnapshot.id,
+                ...documentSnapshot.data()
+            });
+        });
+
+        renderLeaderboard();
+    });
+}
+
+async function scoreQualifiesForLeaderboard(newScore) {
     if (newScore <= 0) return false;
 
-    if (leaderboardScores.length < MAX_LEADERBOARD_SCORES) {
+    const leaderboardQuery = query(
+        collection(db, "leaderboard"),
+        orderBy("score", "desc"),
+        limit(MAX_LEADERBOARD_SCORES)
+    );
+
+    const snapshot = await getDocs(leaderboardQuery);
+
+    const scores = [];
+
+    snapshot.forEach(documentSnapshot => {
+        scores.push(documentSnapshot.data());
+    });
+
+    if (scores.length < MAX_LEADERBOARD_SCORES) {
         return true;
     }
 
-    const lowestScore = leaderboardScores[leaderboardScores.length - 1]?.score || 0;
-    return newScore > lowestScore;
+    const lowestTopScore = scores[scores.length - 1]?.score || 0;
+
+    return newScore > lowestTopScore;
 }
 
-function saveScoreIfHighEnough() {
-    if (!scoreQualifiesForLeaderboard(score)) {
-        return;
-    }
+async function saveScoreIfHighEnough() {
+    const qualifies = await scoreQualifiesForLeaderboard(score);
 
-    leaderboardScores.push({
+    if (!qualifies) return;
+
+    await addDoc(collection(db, "leaderboard"), {
         user: currentUser || "Guest",
         score,
-        time: Date.now()
+        createdAt: serverTimestamp()
     });
-
-    leaderboardScores.sort((a, b) => b.score - a.score);
-    leaderboardScores = leaderboardScores.slice(0, MAX_LEADERBOARD_SCORES);
-
-    writeJSON("pirateSnakeScores", leaderboardScores);
 }
 
 function renderLeaderboard() {
     leaderboardList.innerHTML = "";
 
-    if (leaderboardScores.length === 0) {
+    if (liveLeaderboardScores.length === 0) {
         const emptyScore = document.createElement("li");
         emptyScore.textContent = "No scores yet.";
         leaderboardList.appendChild(emptyScore);
         return;
     }
 
-    leaderboardScores.forEach(entry => {
+    liveLeaderboardScores.forEach(entry => {
         const item = document.createElement("li");
-        item.textContent = `${entry.user} - ${entry.score}`;
+        item.textContent = `${entry.user || "Guest"} - ${entry.score || 0}`;
         leaderboardList.appendChild(item);
     });
 }
@@ -339,7 +419,7 @@ function gameTick() {
     scheduleNextTick();
 }
 
-function endGame() {
+async function endGame() {
     if (gameEnded) return;
 
     gameEnded = true;
@@ -350,10 +430,10 @@ function endGame() {
         gameLoopId = null;
     }
 
-    saveScoreIfHighEnough();
-
     finalScore.textContent = score;
     showScreen("game-over-screen");
+
+    await saveScoreIfHighEnough();
 }
 
 /* =========================
@@ -410,10 +490,6 @@ function updateGame() {
 
     const willEatFood = newHead.x === food.x && newHead.y === food.y;
 
-    /*
-       If the snake is NOT eating, the tail moves away.
-       So checking collision against the body without the tail prevents false self-collisions.
-    */
     const bodyToCheck = willEatFood ? snake : snake.slice(0, -1);
 
     const hitSelf = bodyToCheck.some(segment => {

@@ -1,7 +1,3 @@
-/* =========================
-   GLOBAL RESET
-========================= */
-
 * {
     box-sizing: border-box;
 }
@@ -25,10 +21,6 @@ body {
     overflow: hidden;
 }
 
-/* =========================
-   MAIN APP CONTAINER
-========================= */
-
 #game-container {
     position: relative;
 
@@ -44,10 +36,6 @@ body {
 
     overflow: hidden;
 }
-
-/* =========================
-   SCREEN SYSTEM
-========================= */
 
 .app-screen {
     position: absolute;
@@ -77,10 +65,6 @@ body {
     justify-content: flex-start;
     padding-top: 12px;
 }
-
-/* =========================
-   MENU / CARD UI
-========================= */
 
 .menu-card {
     width: 86%;
@@ -115,10 +99,6 @@ body {
     font-size: 17px;
     font-weight: bold;
 }
-
-/* =========================
-   BUTTONS & INPUTS
-========================= */
 
 button {
     width: 86%;
@@ -181,10 +161,6 @@ input:focus {
     box-shadow: 0 0 10px rgba(255, 215, 0, 0.35);
 }
 
-/* =========================
-   GAME BOARD
-========================= */
-
 #score-display {
     width: 100%;
     margin-bottom: 8px;
@@ -209,10 +185,6 @@ input:focus {
     background: #0b3d91;
     border: 3px solid #d4af37;
 }
-
-/* =========================
-   D-PAD
-========================= */
 
 #d-pad {
     display: grid;
@@ -255,10 +227,6 @@ input:focus {
     transform: scale(0.92);
 }
 
-/* =========================
-   MESSAGE BOARD
-========================= */
-
 .board-card {
     max-height: 94%;
 }
@@ -294,10 +262,6 @@ input:focus {
     font-weight: bold;
 }
 
-/* =========================
-   LEADERBOARD
-========================= */
-
 #leaderboard-list {
     min-height: 170px;
     padding-left: 34px;
@@ -310,10 +274,6 @@ input:focus {
     margin: 8px 0;
     font-weight: bold;
 }
-
-/* =========================
-   RESPONSIVE FIXES
-========================= */
 
 @media (max-height: 720px) {
     #game-container {
