@@ -1,28 +1,6 @@
 "use strict";
 
 /* =========================
-   FIREBASE IMPORTS
-========================= */
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-
-import {
-    getFirestore,
-    collection,
-    addDoc,
-    deleteDoc,
-    doc,
-    getDocs,
-    onSnapshot,
-    query,
-    where,
-    orderBy,
-    limit,
-    serverTimestamp,
-    Timestamp
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-
-/* =========================
    FIREBASE CONFIG
 ========================= */
 
@@ -36,8 +14,8 @@ const firebaseConfig = {
     measurementId: "G-CR21XZGM55"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 /* =========================
    CONFIG
@@ -53,7 +31,7 @@ const MAX_MESSAGES = 75;
 const MAX_LEADERBOARD_SCORES = 10;
 
 /* =========================
-   DOM ELEMENTS
+   DOM
 ========================= */
 
 const screens = document.querySelectorAll(".app-screen");
@@ -83,7 +61,7 @@ const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
 
 /* =========================
-   APP STATE
+   STATE
 ========================= */
 
 let currentUser = localStorage.getItem("pirateSnakeUser") || "";
@@ -103,6 +81,9 @@ let gameEnded = false;
 let liveMessages = [];
 let liveLeaderboardScores = [];
 
+let messagesListenerStarted = false;
+let leaderboardListenerStarted = false;
+
 /* =========================
    IMAGE
 ========================= */
@@ -115,20 +96,16 @@ oceanImage.src = "ocean.png";
 ========================= */
 
 function showScreen(screenId) {
-    screens.forEach(screen => {
-        screen.classList.add("hidden");
-    });
+    screens.forEach(screen => screen.classList.add("hidden"));
 
-    const nextScreen = document.getElementById(screenId);
-
-    if (nextScreen) {
-        nextScreen.classList.remove("hidden");
+    const screen = document.getElementById(screenId);
+    if (screen) {
+        screen.classList.remove("hidden");
     }
 }
 
 function showMenu() {
     stopGame();
-
     displayUsername.textContent = currentUser;
     showScreen("menu-screen");
 }
@@ -139,8 +116,13 @@ function showMenu() {
 
 function initApp() {
     stopGame();
-    listenForMessages();
-    listenForLeaderboard();
+
+    try {
+        listenForMessages();
+        listenForLeaderboard();
+    } catch (error) {
+        console.error("Firebase listener startup error:", error);
+    }
 
     if (currentUser.trim()) {
         showMenu();
@@ -149,7 +131,11 @@ function initApp() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", initApp);
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initApp);
+} else {
+    initApp();
+}
 
 /* =========================
    USERNAME
@@ -165,7 +151,6 @@ function saveUsername() {
 
     currentUser = name;
     localStorage.setItem("pirateSnakeUser", currentUser);
-
     showMenu();
 }
 
@@ -178,61 +163,71 @@ usernameInput.addEventListener("keydown", event => {
 });
 
 /* =========================
-   MESSAGE BOARD - FIRESTORE
+   MESSAGE BOARD
 ========================= */
 
-function getMessageCutoffTimestamp() {
-    const cutoffMs = Date.now() - MESSAGE_LIFETIME_MS;
-    return Timestamp.fromMillis(cutoffMs);
-}
-
-async function deleteExpiredMessages() {
-    const cutoff = getMessageCutoffTimestamp();
-
-    const expiredMessagesQuery = query(
-        collection(db, "messages"),
-        where("createdAt", "<", cutoff)
-    );
-
-    const snapshot = await getDocs(expiredMessagesQuery);
-
-    snapshot.forEach(async documentSnapshot => {
-        await deleteDoc(doc(db, "messages", documentSnapshot.id));
-    });
+function getCutoffTimestamp() {
+    return firebase.firestore.Timestamp.fromMillis(Date.now() - MESSAGE_LIFETIME_MS);
 }
 
 function listenForMessages() {
-    const cutoff = getMessageCutoffTimestamp();
+    if (messagesListenerStarted) return;
+    messagesListenerStarted = true;
 
-    const messagesQuery = query(
-        collection(db, "messages"),
-        where("createdAt", ">=", cutoff),
-        orderBy("createdAt", "asc"),
-        limit(MAX_MESSAGES)
-    );
+    db.collection("messages")
+        .where("createdAt", ">=", getCutoffTimestamp())
+        .orderBy("createdAt", "asc")
+        .limit(MAX_MESSAGES)
+        .onSnapshot(
+            snapshot => {
+                liveMessages = [];
 
-    onSnapshot(messagesQuery, snapshot => {
-        liveMessages = [];
+                snapshot.forEach(doc => {
+                    liveMessages.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
 
-        snapshot.forEach(documentSnapshot => {
-            liveMessages.push({
-                id: documentSnapshot.id,
-                ...documentSnapshot.data()
-            });
+                renderMessages();
+            },
+            error => {
+                console.error("Message listener error:", error);
+                messagesContainer.innerHTML = "";
+                const row = document.createElement("div");
+                row.className = "message";
+                row.textContent = "Message board could not load. Check Firebase rules or indexes.";
+                messagesContainer.appendChild(row);
+            }
+        );
+}
+
+async function deleteExpiredMessages() {
+    try {
+        const snapshot = await db.collection("messages")
+            .where("createdAt", "<", getCutoffTimestamp())
+            .get();
+
+        const deletes = [];
+
+        snapshot.forEach(doc => {
+            deletes.push(doc.ref.delete());
         });
 
-        renderMessages();
-    });
+        await Promise.all(deletes);
+    } catch (error) {
+        console.warn("Expired message cleanup failed:", error);
+    }
 }
 
 function renderMessages() {
     messagesContainer.innerHTML = "";
 
     if (liveMessages.length === 0) {
-        const emptyMessage = document.createElement("div");
-        emptyMessage.className = "message";
-        emptyMessage.textContent = "No messages yet.";
-        messagesContainer.appendChild(emptyMessage);
+        const empty = document.createElement("div");
+        empty.className = "message";
+        empty.textContent = "No messages yet.";
+        messagesContainer.appendChild(empty);
         return;
     }
 
@@ -240,15 +235,15 @@ function renderMessages() {
         const row = document.createElement("div");
         row.className = "message";
 
-        const username = document.createElement("span");
-        username.className = "username";
-        username.textContent = message.user || "Guest";
+        const name = document.createElement("span");
+        name.className = "username";
+        name.textContent = message.user || "Guest";
 
-        const messageText = document.createElement("span");
-        messageText.textContent = `: ${message.text || ""}`;
+        const text = document.createElement("span");
+        text.textContent = `: ${message.text || ""}`;
 
-        row.appendChild(username);
-        row.appendChild(messageText);
+        row.appendChild(name);
+        row.appendChild(text);
 
         messagesContainer.appendChild(row);
     });
@@ -261,20 +256,25 @@ async function postMessage() {
 
     if (!text) return;
 
-    await addDoc(collection(db, "messages"), {
-        user: currentUser || "Guest",
-        text,
-        createdAt: serverTimestamp()
-    });
+    try {
+        await db.collection("messages").add({
+            user: currentUser || "Guest",
+            text,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
-    newMessageInput.value = "";
+        newMessageInput.value = "";
+    } catch (error) {
+        console.error("Post message error:", error);
+        alert("Message could not be posted. Check Firebase connection.");
+    }
 }
 
-openBoardBtn.addEventListener("click", async () => {
+openBoardBtn.addEventListener("click", () => {
     stopGame();
-    await deleteExpiredMessages();
-    renderMessages();
     showScreen("message-board-screen");
+    renderMessages();
+    deleteExpiredMessages();
 });
 
 closeBoardBtn.addEventListener("click", showMenu);
@@ -287,75 +287,79 @@ newMessageInput.addEventListener("keydown", event => {
 });
 
 /* =========================
-   LEADERBOARD - FIRESTORE
+   LEADERBOARD
 ========================= */
 
 function listenForLeaderboard() {
-    const leaderboardQuery = query(
-        collection(db, "leaderboard"),
-        orderBy("score", "desc"),
-        limit(MAX_LEADERBOARD_SCORES)
-    );
+    if (leaderboardListenerStarted) return;
+    leaderboardListenerStarted = true;
 
-    onSnapshot(leaderboardQuery, snapshot => {
-        liveLeaderboardScores = [];
+    db.collection("leaderboard")
+        .orderBy("score", "desc")
+        .limit(MAX_LEADERBOARD_SCORES)
+        .onSnapshot(
+            snapshot => {
+                liveLeaderboardScores = [];
 
-        snapshot.forEach(documentSnapshot => {
-            liveLeaderboardScores.push({
-                id: documentSnapshot.id,
-                ...documentSnapshot.data()
-            });
-        });
+                snapshot.forEach(doc => {
+                    liveLeaderboardScores.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
 
-        renderLeaderboard();
-    });
+                renderLeaderboard();
+            },
+            error => {
+                console.error("Leaderboard listener error:", error);
+                leaderboardList.innerHTML = "";
+                const item = document.createElement("li");
+                item.textContent = "Leaderboard could not load.";
+                leaderboardList.appendChild(item);
+            }
+        );
 }
 
 async function scoreQualifiesForLeaderboard(newScore) {
     if (newScore <= 0) return false;
 
-    const leaderboardQuery = query(
-        collection(db, "leaderboard"),
-        orderBy("score", "desc"),
-        limit(MAX_LEADERBOARD_SCORES)
-    );
-
-    const snapshot = await getDocs(leaderboardQuery);
+    const snapshot = await db.collection("leaderboard")
+        .orderBy("score", "desc")
+        .limit(MAX_LEADERBOARD_SCORES)
+        .get();
 
     const scores = [];
+    snapshot.forEach(doc => scores.push(doc.data()));
 
-    snapshot.forEach(documentSnapshot => {
-        scores.push(documentSnapshot.data());
-    });
-
-    if (scores.length < MAX_LEADERBOARD_SCORES) {
-        return true;
-    }
+    if (scores.length < MAX_LEADERBOARD_SCORES) return true;
 
     const lowestTopScore = scores[scores.length - 1]?.score || 0;
-
     return newScore > lowestTopScore;
 }
 
 async function saveScoreIfHighEnough() {
-    const qualifies = await scoreQualifiesForLeaderboard(score);
+    try {
+        const qualifies = await scoreQualifiesForLeaderboard(score);
 
-    if (!qualifies) return;
+        if (!qualifies) return;
 
-    await addDoc(collection(db, "leaderboard"), {
-        user: currentUser || "Guest",
-        score,
-        createdAt: serverTimestamp()
-    });
+        await db.collection("leaderboard").add({
+            user: currentUser || "Guest",
+            score,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Save score error:", error);
+    }
 }
 
 function renderLeaderboard() {
     leaderboardList.innerHTML = "";
 
     if (liveLeaderboardScores.length === 0) {
-        const emptyScore = document.createElement("li");
-        emptyScore.textContent = "No scores yet.";
-        leaderboardList.appendChild(emptyScore);
+        const empty = document.createElement("li");
+        empty.textContent = "No scores yet.";
+        leaderboardList.appendChild(empty);
         return;
     }
 
@@ -375,7 +379,7 @@ openLeaderboardBtn.addEventListener("click", () => {
 closeLeaderboardBtn.addEventListener("click", showMenu);
 
 /* =========================
-   GAME LOOP CONTROL
+   GAME LOOP
 ========================= */
 
 function startGame() {

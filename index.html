@@ -22,7 +22,7 @@
     <main id="game-container">
 
         <!-- REGISTER SCREEN -->
-        <section id="register-screen" class="app-screen menu-screen hidden">
+        <section id="register-screen" class="app-screen menu-screen">
             <div class="menu-card">
                 <h1>Pirate Snake</h1>
                 <h2>Welcome!</h2>
@@ -114,6 +114,11 @@
 
     </main>
 
-    <script type="module" src="script.js"></script>
+    <!-- Firebase Browser-Compatible Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+
+    <!-- Game Script -->
+    <script src="script.js" defer></script>
 </body>
 </html>

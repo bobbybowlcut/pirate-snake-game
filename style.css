@@ -18,7 +18,7 @@ body {
     align-items: center;
     justify-content: center;
 
-    overflow: hidden;
+    overflow: auto;
 }
 
 #game-container {
@@ -48,16 +48,22 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+
+    z-index: 1;
 }
 
 .hidden {
     display: none !important;
 }
 
+/* Menu background image restored */
 .menu-screen {
-    background-image: url("ship-background.jpg");
+    background-image:
+        linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.55)),
+        url("ship-background.jpg");
     background-size: cover;
     background-position: center;
+    background-repeat: no-repeat;
 }
 
 .game-screen {
@@ -69,6 +75,7 @@ body {
 .menu-card {
     width: 86%;
     max-width: 350px;
+    max-height: 94%;
 
     padding: 20px;
 
@@ -79,6 +86,7 @@ body {
     text-align: center;
 
     box-shadow: 0 0 22px rgba(0, 0, 0, 0.85);
+    overflow: hidden;
 }
 
 .menu-card h1,
